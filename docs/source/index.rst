@@ -68,6 +68,7 @@ Documentation
 
    features/autoscaling/autoscaling.rst
    features/kvcache-offloading.rst
+   features/kvcache-pd-reuse.rst
    features/kv-event-sync.rst
 
 .. toctree::

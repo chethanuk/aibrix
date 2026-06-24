@@ -19,6 +19,12 @@ KVCache Offloading
 .. warning::
     Currently, only FlashAttention and XFormers are supported.
 
+.. seealso::
+    To hand the KV cache from a **prefill** engine to a **decode** engine through a shared
+    store (prefill/decode disaggregation with KV reuse), see :ref:`kvcache-pd-reuse`, which
+    explains ``AIBrixOffloadingConnector`` vs ``AIBrixPDReuseConnector`` and the single-node,
+    no-RDMA path.
+
 .. _l1_cache_example:
 
 L1 Cache Example
