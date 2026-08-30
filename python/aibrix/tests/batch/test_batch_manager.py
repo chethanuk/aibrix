@@ -14,7 +14,7 @@
 
 import asyncio
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
 import pytest
@@ -394,7 +394,7 @@ async def test_job_committed_handler_expires_overdue_job_before_scheduling():
             name="expired-before-scheduling",
             namespace="default",
             uid="expired-before-scheduling-uid",
-            creationTimestamp=datetime.now(),
+            creationTimestamp=datetime.now(timezone.utc),
             resourceVersion=None,
             deletionTimestamp=None,
         ),
@@ -406,7 +406,7 @@ async def test_job_committed_handler_expires_overdue_job_before_scheduling():
         status=BatchJobStatus(
             jobID="expired-before-scheduling-id",
             state=BatchJobState.CREATED,
-            createdAt=datetime.now() - timedelta(seconds=5),
+            createdAt=datetime.now(timezone.utc) - timedelta(seconds=5),
         ),
     )
 
@@ -1720,6 +1720,58 @@ def test_emit_finished_job_metrics_only_emits_terminal_breakdown():
         assert 'job_id="job-breakdown"' in metrics_text
     finally:
         shutdown_metrics()
+
+
+@pytest.mark.asyncio
+async def test_job_updated_handler_already_done_job_returns_true_debug_logged():
+    job_manager = _job_manager()
+    meta_job = _in_progress_meta_job("job-done-already", total_requests=10)
+    meta_job.status.state = BatchJobState.FINALIZED
+    job_manager._done_jobs[meta_job.job_id] = meta_job
+
+    updated = meta_job.copy()
+    updated.status.state = BatchJobState.FINALIZED
+
+    assert await job_manager.job_updated_handler(meta_job, updated) is True
+
+
+@pytest.mark.asyncio
+async def test_cancel_and_conclude_job_clears_monitored_snapshot():
+    class DummyBridge:
+        async def persist_status(self, job, old_job):
+            pass
+
+    class DummyEntityManager:
+        def __init__(self):
+            self._monitored_job_snapshots = {}
+
+        def _forget_job(self, job_id):
+            self._monitored_job_snapshots.pop(job_id, None)
+
+        async def cancel_job(self, job):
+            self._forget_job(job.job_id)
+
+        async def update_job_status(self, job):
+            self._forget_job(job.job_id)
+
+    job_manager = _job_manager()
+    em = DummyEntityManager()
+    job_manager._job_entity_manager = em
+    job_manager._bridge._em = em
+
+    meta_job = _in_progress_meta_job("job-snapshot-clear", total_requests=10)
+    job_manager._in_progress_jobs[meta_job.job_id] = meta_job
+    em._monitored_job_snapshots[meta_job.job_id] = meta_job.copy()
+
+    await job_manager.cancel_job(meta_job.job_id)
+    assert meta_job.job_id not in em._monitored_job_snapshots
+
+    meta_job2 = _in_progress_meta_job("job-snapshot-clear-2", total_requests=10)
+    job_manager._in_progress_jobs[meta_job2.job_id] = meta_job2
+    em._monitored_job_snapshots[meta_job2.job_id] = meta_job2.copy()
+
+    await job_manager.conclude_job(meta_job2, old_job=meta_job2)
+    assert meta_job2.job_id not in em._monitored_job_snapshots
 
 
 @pytest.mark.asyncio

@@ -427,6 +427,30 @@ async def test_refresh_does_not_apply_older_resource_version(
 
 
 @pytest.mark.asyncio
+async def test_refresh_does_not_retain_uncommitted_snapshot_on_committed_failure(
+    fake_metastore, monkeypatch
+):
+    _, _ = fake_metastore
+    store = JobStore(storage_type=StorageType.LOCAL)
+    new_job = BatchJob.new_local(spec=_spec())
+    new_job.status.state = BatchJobState.CREATED
+
+    async def list_recovery_jobs():
+        return [new_job]
+
+    async def committed_handler(job):
+        return False
+
+    monkeypatch.setattr(store, "_list_active_jobs", list_recovery_jobs)
+    store.on_job_committed(committed_handler)
+
+    await store.refresh()
+
+    assert new_job.job_id not in store.active_jobs
+    assert new_job.job_id not in store._monitored_job_snapshots
+
+
+@pytest.mark.asyncio
 async def test_job_store_delete_removes_from_metastore_and_fires_deleted(
     fake_metastore,
 ):
