@@ -251,7 +251,6 @@ class JobEntityManager(ABC):
             current_jobs[job_id] = snapshot
             old_job = self._monitored_job_snapshots.get(job_id)
             if old_job is None:
-                self._monitored_job_snapshots[job_id] = snapshot
                 if self._should_publish_committed(snapshot):
                     await self.job_committed(snapshot)
                 else:
@@ -284,7 +283,6 @@ class JobEntityManager(ABC):
             if job_id is None:
                 continue
             snapshot = job.model_copy(deep=True)
-            self._monitored_job_snapshots[job_id] = snapshot
             if not self._should_publish_committed(snapshot):
                 self._sync_active_job(snapshot)
                 continue

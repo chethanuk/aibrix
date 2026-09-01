@@ -664,6 +664,16 @@ class BatchManager(RunningJobs, SchedulableJobs):
             # Load cache job, possibily with local metainfo.
             old_job_in_category = old_category.get(job_id)
             if old_job_in_category is None:
+                if (
+                    old_category is self._in_progress_jobs
+                    and new_category is self._done_jobs
+                    and job_id in self._done_jobs
+                ):
+                    logger.debug(
+                        "Job already in done jobs category, skipping update",
+                        job_id=job_id,
+                    )  # type: ignore[call-arg]
+                    return True
                 logger.warning(
                     "Job is not in old category, ignore updating",
                     job_id=job_id,
